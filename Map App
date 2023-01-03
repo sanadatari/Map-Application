@@ -1,0 +1,63 @@
+from ._anvil_designer import Form1Template
+from anvil import *
+from anvil.js.window import mapboxgl, MapboxGeocoder
+import anvil.js
+import anvil.http
+
+class Form1(Form1Template):
+  def __init__(self, **properties):
+    # Set Form properties and Data Bindings.
+    self.init_components(**properties)
+
+    # Any code you write here will run before the form opens.
+
+  def form_show(self, **event_args):
+    """This method is called when the HTML panel is shown on the screen"""
+    mapboxgl.accessToken = 'pk.eyJ1Ijoic2FuYWRhdGFyaSIsImEiOiJjbGNlamVzeWsxejM1M3ZxcmUydjlsNmhlIn0.T9-z3zTPkIheSeQSBzCx4w';
+    self.map = mapboxgl.Map({
+    'container': anvil.js.get_dom_node(self.spacer_1),
+    'style': 'mapbox://styles/mapbox/streets-v12',
+    'center': [23.76, 44.52],
+    'zoom': 9
+    })
+    
+
+    self.marker =  mapboxgl.Marker({
+        'color': "#FFFFFF",
+        'draggable': True}).setLngLat([23.76, 44.52]).addTo(self.map)
+    
+    self.geocoder = MapboxGeocoder({'accessToken' : mapboxgl.accessToken, 'marker' : False})
+    self.map.addControl(self.geocoder)
+    
+    self.geocoder.on("result", self.move_marker)
+    
+  def move_marker(self, result):
+      lnglat = result['result']['geometry']['coordinates']
+      self.marker.setLngLat(lnglat)
+      self.get_iso()
+      
+      
+  def get_iso(self):
+    
+    lnglat = self.marker.getLngLat()
+    response = anvil.http.request(f"https://api.mapbox.com/isochrone/v1/mapbox/driving/{lnglat.lng},{lnglat.lat}?contours_minutes=15&polygons=true&access_token=pk.eyJ1Ijoic2FuYWRhdGFyaSIsImEiOiJjbGNlamVzeWsxejM1M3ZxcmUydjlsNmhlIn0.T9-z3zTPkIheSeQSBzCx4w",json=True)
+    
+    if not self.map.getSource('iso'):
+      self.map.addSource('iso', {
+      'type': 'geojson',
+      'data': {
+        'type': 'FeatureCollection',
+        'features': [] 
+      }});
+  
+      self.map.addLayer(
+      {
+        'id': 'isoLayer',
+        'type': 'fill',
+      
+        'source': 'iso',
+        'layout': {},
+        'paint': {'fill-color': '#5a3fc0','fill-opacity': 0.3} },'poi-label');
+
+      
+      self.map.getSource('iso').setData(response)
